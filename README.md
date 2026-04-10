@@ -1,4 +1,5 @@
 🛒 Shoplifting Detection System (YOLO + LSTM)
+
 📌 Overview:
 This project is an AI-powered surveillance system that detects suspicious human activity (shoplifting) in retail stores using deep learning.
 
