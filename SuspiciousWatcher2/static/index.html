@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+        name="description"
+        content="Suspicious Activity Detection System"
+    />
+    <title>Suspicious Activity Detection</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet" />
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <style>
+        /* Additional custom styles */
+        body {
+            background-color: var(--bs-dark);
+            color: var(--bs-light);
+        }
+        .camera-feed-container {
+            position: relative;
+        }
+        .recording-indicator {
+            width: 12px;
+            height: 12px;
+            background-color: red;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <i class="fas fa-video me-2"></i>
+                <span>Suspicious Activity Detection</span>
+            </a>
+            
+            <button 
+                class="navbar-toggler" 
+                type="button" 
+                data-bs-toggle="collapse" 
+                data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" 
+                aria-expanded="false" 
+                aria-label="Toggle navigation"
+            >
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">
+                            <i class="fas fa-home me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <i class="fas fa-history me-1"></i> History
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <i class="fas fa-cog me-1"></i> Settings
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">
+                            <i class="fas fa-question-circle me-1"></i> Help
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mt-4">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Live Camera Feed</h5>
+                        <button 
+                            class="btn btn-success"
+                            id="toggleDetectionBtn"
+                        >
+                            <i class="fas fa-play-circle me-2"></i>
+                            Start Detection
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="camera-feed-container">
+                            <video 
+                                id="cameraFeed"
+                                autoplay 
+                                playsinline 
+                                muted 
+                                class="w-100 rounded"
+                                style="max-height: 60vh;"
+                            ></video>
+                            
+                            <div class="position-absolute top-0 end-0 p-2 d-none" id="recordingIndicator">
+                                <div class="badge bg-danger d-flex align-items-center">
+                                    <span class="me-1">Recording</span>
+                                    <div class="recording-indicator"></div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3 text-center text-muted">
+                            <small id="statusText">
+                                Start detection to begin monitoring
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Activity Log</h5>
+                        <span class="badge bg-secondary" id="activityCount">0 activities</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="activityList" class="activity-list" style="max-height: 500px; overflow-y: auto;">
+                            <div class="text-center py-4" id="emptyState">
+                                <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
+                                <p class="text-muted">No activities detected yet</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-center">
+                        <button class="btn btn-sm btn-secondary">
+                            <i class="fas fa-download me-1"></i> Export Log
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="alert alert-warning alert-dismissible fade show mt-3 d-none" role="alert" id="alertBox">
+            <strong>Alert!</strong> <span id="alertText"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    </main>
+    
+    <footer class="container mt-5 mb-3 text-center text-muted">
+        <p class="mb-1">Suspicious Activity Detection System</p>
+        <p class="mb-0">Using laptop camera as CCTV feed</p>
+    </footer>
+
+    <!-- Bootstrap JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const API_BASE_URL = '/api';
+            let isDetecting = false;
+            let activities = [];
+            let latestActivity = null;
+            let pollingInterval;
+
+            const cameraFeed = document.getElementById('cameraFeed');
+            const toggleBtn = document.getElementById('toggleDetectionBtn');
+            const recordingIndicator = document.getElementById('recordingIndicator');
+            const statusText = document.getElementById('statusText');
+            const activityList = document.getElementById('activityList');
+            const emptyState = document.getElementById('emptyState');
+            const activityCount = document.getElementById('activityCount');
+            const alertBox = document.getElementById('alertBox');
+            const alertText = document.getElementById('alertText');
+            
+            // Start camera
+            async function startCamera() {
+                try {
+                    // Request access to the user's camera
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: "user"
+                        } 
+                    });
+                    
+                    // Set the video source to the camera stream
+                    cameraFeed.srcObject = stream;
+                    
+                } catch (err) {
+                    console.error("Error accessing camera:", err);
+                    
+                    // Create a fallback display for the camera feed instead of showing an alert
+                    const cameraContainer = document.querySelector('.camera-feed-container');
+                    cameraFeed.style.display = 'none';
+                    
+                    const fallbackElement = document.createElement('div');
+                    fallbackElement.className = 'text-center py-5 bg-dark';
+                    fallbackElement.innerHTML = `
+                        <i class="fas fa-video-slash fa-4x text-danger mb-3"></i>
+                        <h5 class="text-warning">Camera Not Available</h5>
+                        <p class="text-muted mb-0">Using simulation mode instead</p>
+                        <p class="text-muted">Detection will still work without camera access</p>
+                    `;
+                    
+                    cameraContainer.appendChild(fallbackElement);
+                }
+            }
+            
+            // Format timestamp
+            function formatTimestamp(timestamp) {
+                const date = new Date(timestamp);
+                return date.toLocaleString();
+            }
+            
+            // Get severity class based on activity type
+            function getSeverityClass(activity) {
+                if (activity.type.includes("Unknown person") || activity.type.includes("Suspicious object")) {
+                    return "bg-danger";
+                } else if (activity.type.includes("Unusual behavior") || activity.type.includes("Loitering")) {
+                    return "bg-warning";
+                } else {
+                    return "bg-info";
+                }
+            }
+            
+            // Update activity list
+            function updateActivityList() {
+                if (activities.length === 0) {
+                    emptyState.classList.remove('d-none');
+                    return;
+                }
+                
+                emptyState.classList.add('d-none');
+                activityCount.textContent = `${activities.length} activities`;
+                
+                // Clear existing activities
+                const activityElements = activityList.querySelectorAll('.activity-item');
+                activityElements.forEach(el => el.remove());
+                
+                // Add activities to the list
+                activities.forEach(activity => {
+                    const activityEl = document.createElement('div');
+                    activityEl.className = `activity-item p-3 border-bottom ${latestActivity && activity.id === latestActivity.id ? 'bg-dark' : ''}`;
+                    
+                    activityEl.innerHTML = `
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <span class="badge ${getSeverityClass(activity)} me-2">
+                                    ${activity.type}
+                                </span>
+                                ${latestActivity && activity.id === latestActivity.id ? 
+                                    '<span class="badge bg-danger">New</span>' : ''}
+                            </div>
+                            <small class="text-muted">
+                                ${formatTimestamp(activity.timestamp)}
+                            </small>
+                        </div>
+                        <div class="mt-2 d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-muted">
+                                    Confidence: ${Math.round(activity.confidence * 100)}%
+                                </small>
+                            </div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-secondary me-1">
+                                    <i class="fas fa-expand-alt"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-bell-slash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    activityList.appendChild(activityEl);
+                });
+            }
+            
+            // Fetch activities
+            async function fetchActivities() {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/activities`);
+                    const data = await response.json();
+                    activities = data;
+                    updateActivityList();
+                } catch (err) {
+                    console.error("Error fetching activities:", err);
+                }
+            }
+            
+            // Poll for latest activity
+            function startPolling() {
+                pollingInterval = setInterval(async () => {
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/latest-activity`);
+                        const data = await response.json();
+                        
+                        // Check if we have a new activity
+                        if (data && (!latestActivity || data.id !== latestActivity.id)) {
+                            latestActivity = data;
+                            
+                            // Check if activity is already in the list
+                            if (!activities.some(act => act.id === data.id)) {
+                                activities.unshift(data);
+                                updateActivityList();
+                                
+                                // Show alert
+                                alertText.textContent = `${data.type} detected at ${formatTimestamp(data.timestamp)} (Confidence: ${Math.round(data.confidence * 100)}%)`;
+                                alertBox.classList.remove('d-none');
+                            }
+                        }
+                    } catch (err) {
+                        console.error("Error fetching latest activity:", err);
+                    }
+                }, 5000); // Poll every 5 seconds
+            }
+            
+            // Stop polling
+            function stopPolling() {
+                if (pollingInterval) {
+                    clearInterval(pollingInterval);
+                }
+            }
+            
+            // Toggle detection
+            async function toggleDetection() {
+                try {
+                    if (isDetecting) {
+                        const response = await fetch(`${API_BASE_URL}/stop-detection`, {
+                            method: 'POST'
+                        });
+                        await response.json();
+                        
+                        isDetecting = false;
+                        toggleBtn.classList.remove('btn-danger');
+                        toggleBtn.classList.add('btn-success');
+                        toggleBtn.innerHTML = '<i class="fas fa-play-circle me-2"></i>Start Detection';
+                        recordingIndicator.classList.add('d-none');
+                        statusText.textContent = 'Start detection to begin monitoring';
+                        stopPolling();
+                    } else {
+                        const response = await fetch(`${API_BASE_URL}/start-detection`, {
+                            method: 'POST'
+                        });
+                        await response.json();
+                        
+                        isDetecting = true;
+                        toggleBtn.classList.remove('btn-success');
+                        toggleBtn.classList.add('btn-danger');
+                        toggleBtn.innerHTML = '<i class="fas fa-stop-circle me-2"></i>Stop Detection';
+                        recordingIndicator.classList.remove('d-none');
+                        statusText.textContent = 'System is actively monitoring for suspicious activities...';
+                        startPolling();
+                    }
+                } catch (err) {
+                    console.error(`Error toggling detection:`, err);
+                    alert(`Failed to ${isDetecting ? 'stop' : 'start'} detection. Please try again.`);
+                }
+            }
+            
+            // Initialize the application
+            async function init() {
+                await startCamera();
+                await fetchActivities();
+                
+                // Add event listener to toggle button
+                toggleBtn.addEventListener('click', toggleDetection);
+            }
+            
+            // Start the application
+            init();
+        });
+    </script>
+</body>
+</html>
